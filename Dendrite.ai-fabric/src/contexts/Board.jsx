@@ -9,9 +9,9 @@ export const useBoard = () => {
 };
 
 const BoardContextProvider = ({ children }) => {
-  const { editor, onReady } = useFabricJSEditor();
+  const { editor, onReady, selectedObjects } = useFabricJSEditor();
   const [items, setItems] = useState([]);
-  const [tool, setTool] = useState("brush");
+  const [tool, setTool] = useState("default");
   return (
     <BoardContext.Provider
       value={{ items, tool, setItems, setTool, editor, onReady }}
