@@ -1,4 +1,4 @@
-import React, {useEffect} from "react";
+import React, { useEffect } from "react";
 import { LuRectangleHorizontal } from "react-icons/lu";
 import { FaP, FaPencil } from "react-icons/fa6";
 
@@ -25,10 +25,14 @@ const ToolsList = () => {
 
   const onAddRectangle = () => {
     editor?.addRectangle();
-    //TODO: change the cursor to draw 
-    localStorage.setItem("items", JSON.stringify(editor?.canvas.toJSON()));
     setTool("rectangle");
     console.log("Tool changed to rectangle");
+  };
+
+  const onAddCircle = () => {
+    editor?.addCircle();
+    localStorage.setItem("items", JSON.stringify(editor?.canvas.toJSON()));
+    setItems(editor.canvas.toJSON());
   };
 
   const toggleDraw = () => {

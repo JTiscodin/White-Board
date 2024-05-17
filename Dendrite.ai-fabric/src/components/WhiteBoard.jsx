@@ -24,6 +24,10 @@ const WhiteBoard = () => {
 
   const { socket } = useUser();
 
+  const [connected, setConnected] = useState(false);
+
+  const [users, setUsers] = useState([]);
+
   //logging the mouse position with intervals
 
   //don't start a new interval if already it has been set
@@ -35,15 +39,27 @@ const WhiteBoard = () => {
     );
   }
 
-  socket.on("connect", () => {
-    //logging the socket.id
-    console.log(socket.id);
-  });
+  useEffect(() => {
+    const handleConnect = () => {
+      console.log(socket.id);
+    };
+
+    const handleDisconnect = () => {
+      setConnected(false);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    return () => {
+      socket.off("connect", handleConnect);
+    };
+  }, [socket]);
 
   useEffect(() => {
     if (log.current) {
-      console.log(position);
-      // socket.emit("hello", position)
+      // console.log(position);
+      socket.emit("hello", position);
       log.current = false;
     }
   }, [position]);
@@ -84,18 +100,37 @@ const WhiteBoard = () => {
         const activeObject = editor.canvas.getActiveObject();
         if (activeObject) {
           editor?.deleteSelected();
-          localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
-          setItems(editor.canvas.toJSON());
         }
       }
     },
-    [undo, redo, editor, setItems]
+    [undo, redo, editor]
   );
 
+  //A canvas method to directly do something, whenver any object is added/removed/modified to canvas, save the canvas to the local storage.
+  const handleObjectOperations = useCallback(() => {
+    localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
+    setItems(editor.canvas.toJSON());
+  }, [editor]);
+
+  useEffect(() => {
+    editor?.canvas.on("object:added", handleObjectOperations);
+    editor?.canvas.on("object:removed", handleObjectOperations);
+    editor?.canvas.on("object:modified", handleObjectOperations);
+
+    return () => {
+      editor?.canvas.off("object:added", handleObjectOperations);
+      editor?.canvas.off("object:removed", handleObjectOperations);
+      editor?.canvas.off("object:modified", handleObjectOperations);
+    };
+  }, [editor, setItems]);
+
+  //Listening to various keydown events for enabling shortcuts
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
 
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [handleKeyDown]);
 
   useEffect(() => {
@@ -119,28 +154,36 @@ const WhiteBoard = () => {
     }
   }, [editor, setItems]);
 
-  const onAddCircle = () => {
-    editor?.addCircle();
-    localStorage.setItem("items", JSON.stringify(editor?.canvas.toJSON()));
-    setItems(editor.canvas.toJSON());
-  };
-
   //connecting to a room
   const connect = () => {
     socket.emit("join-room", socket.id);
+    setConnected(true);
   };
 
   useEffect(() => {
     const handleNewUser = (msg) => {
       console.log(msg);
-    }
+    };
 
+    const handlePositionChange = (positions) => {
+      console.log(positions);
+      let finalUsers = positions.filter((e) => e[0] !== socket.id);
+      setUsers(finalUsers);
+    };
+
+    //When a new user connects to the room
     socket.on("New-User", handleNewUser);
 
+    //When position of any other user in the room changes
+    socket.on("change-position", handlePositionChange);
+
     return () => {
-      socket.off("New-User", handleNewUser)
-    }
-  },[socket]);
+      socket.off("New-User", handleNewUser);
+      socket.off("change-position", handlePositionChange);
+    };
+  }, [socket]);
+
+  //setting up multiple cursors
 
   return (
     <>
@@ -150,6 +193,7 @@ const WhiteBoard = () => {
       >
         Connect to the room
       </button>
+
       <div className="w-full h-full my-7 flex justify-center items-center">
         <ToolsList />
         <div
@@ -162,6 +206,16 @@ const WhiteBoard = () => {
           />
         </div>
       </div>
+      {users.map((user) => (
+        <div
+          key={user[0]} // Assuming `user` has a `socketId` property
+          className="absolute rounded-full w-4 h-4 bg-red-500 pointer-events-none"
+          style={{
+            left: `${user[1].clientX}px`,
+            top: `${user[1].clientY}px`,
+          }}
+        />
+      ))}
     </>
   );
 };
