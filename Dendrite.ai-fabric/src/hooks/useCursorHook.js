@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useBoard } from "../contexts/Board";
 
 const useMousePosition = () => {
@@ -9,37 +9,18 @@ const useMousePosition = () => {
 
   const { editor } = useBoard();
 
-  const updatePosition = (e) => {
-    const { pageX, pageY, clientX, clientY } = e;
-
-    setPosition({
-      clientX,
-      clientY,
-    });
-  };
-
-  const handleMouseMove = (e) => {
+  const handleMouseMove = useCallback((e) => {
     let clientX = e.absolutePointer.x;
     let clientY = e.absolutePointer.y;
     setPosition({
       clientX,
       clientY,
     });
-    console.log(e.absolutePointer);
-  };
+  }, []);
 
   useEffect(() => {
-    const canvas = document.getElementById("white-board");
-    if (!canvas) return;
-
-    // canvas.addEventListener("mousemove", updatePosition, false);
     editor?.canvas.on("mouse:move", handleMouseMove);
-
-    return () => {
-      canvas.removeEventListener("mousemove", updatePosition);
-      canvas.removeEventListener("mouseenter", updatePosition);
-    };
-  }, [editor]);
+  }, [editor,handleMouseMove]);
 
   return position;
 };

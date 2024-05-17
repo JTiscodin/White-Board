@@ -211,7 +211,7 @@ const WhiteBoard = () => {
           {users.map((user) => (
             <div
               key={user[0]} // Assuming `user` has a `socketId` property
-              className="absolute rounded-full w-4 h-4 bg-red-500 pointer-events-none"
+              className="absolute transition-position duration-100 rounded-full w-4 h-4 bg-red-500 pointer-events-none"
               style={{
                 left: `${user[1].clientX}px`,
                 top: `${user[1].clientY}px`,
