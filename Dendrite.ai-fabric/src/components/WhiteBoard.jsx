@@ -112,6 +112,10 @@ const WhiteBoard = () => {
     setItems(editor.canvas.toJSON());
   }, [editor]);
 
+  const handleMouseMove = (e) => {
+    console.log(e.absolutePointer);
+  };
+
   useEffect(() => {
     editor?.canvas.on("object:added", handleObjectOperations);
     editor?.canvas.on("object:removed", handleObjectOperations);
@@ -198,24 +202,24 @@ const WhiteBoard = () => {
         <ToolsList />
         <div
           id="white-board"
-          className="flex justify-center items-center rounded-2xl w-[80vw] h-[90vh] overflow-hidden border-2"
+          className="flex  relative justify-center items-center rounded-2xl w-[80vw] h-[90vh] overflow-hidden border-2"
         >
           <FabricJSCanvas
             className="sample-canvas h-full border-green-800 w-full cursor-crosshair bg-gray-50"
             onReady={onReady}
           />
+          {users.map((user) => (
+            <div
+              key={user[0]} // Assuming `user` has a `socketId` property
+              className="absolute rounded-full w-4 h-4 bg-red-500 pointer-events-none"
+              style={{
+                left: `${user[1].clientX}px`,
+                top: `${user[1].clientY}px`,
+              }}
+            />
+          ))}
         </div>
       </div>
-      {users.map((user) => (
-        <div
-          key={user[0]} // Assuming `user` has a `socketId` property
-          className="absolute rounded-full w-4 h-4 bg-red-500 pointer-events-none"
-          style={{
-            left: `${user[1].clientX}px`,
-            top: `${user[1].clientY}px`,
-          }}
-        />
-      ))}
     </>
   );
 };
