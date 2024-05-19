@@ -8,16 +8,23 @@ import React, {
 import { FabricJSCanvas, useFabricJSEditor } from "fabricjs-react";
 import useMousePosition from "../hooks/useCursorHook";
 import { useUser } from "../contexts/User";
+import { useParams } from "react-router-dom";
 import { useBoard } from "../contexts/Board";
 
-import ToolsList from "./ToolsList";
+import ToolsList from "../components/ToolsList";
 
 import { CiLocationArrow1 } from "react-icons/ci";
 
-const WhiteBoard = () => {
+const CollaborativeWhiteBoard = () => {
   const { items, tool, setItems, setTool, editor, onReady } = useBoard();
 
   let log = useRef(true);
+
+  let { roomId } = useParams();
+
+  let [room, setRoom] = useState({});
+
+  //Getting room details from roomID
 
   // Setting an intevalID, for the mousePosition to log, main purpose is to send position to the backend
   let mousePositionIntervalID = useRef(null);
@@ -29,6 +36,34 @@ const WhiteBoard = () => {
   const [connected, setConnected] = useState(false);
 
   const [users, setUsers] = useState([]);
+
+  const getRoomWithRoomId = async (roomId) => {
+    let response = await fetch(`http://localhost:8000/getRoom/${roomId}`);
+
+    let room = await response.json();
+
+    console.log(room.room);
+
+    setRoom(room.room);
+
+    connect()
+  };
+
+  useEffect(() => {
+    getRoomWithRoomId(roomId);
+  }, []);
+
+  useEffect(() => {
+    if (editor && room.canvas) {
+      const loadCanvasData = () => {
+        editor.canvas.loadFromJSON(JSON.parse(room.canvas), () => {
+          editor.canvas.renderAll();
+        });
+      };
+
+      onReady(loadCanvasData);
+    }
+  }, [editor, room, onReady]);
 
   //logging the mouse position with intervals
 
@@ -55,6 +90,7 @@ const WhiteBoard = () => {
 
     return () => {
       socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
     };
   }, [socket]);
 
@@ -147,7 +183,7 @@ const WhiteBoard = () => {
   }, [tool, setTool]);
 
   useEffect(() => {
-    const savedState = localStorage.getItem("items");
+    const savedState = localStorage.getItem(roomId);
     if (savedState && editor) {
       editor.canvas.loadFromJSON(JSON.parse(savedState), () => {
         editor.canvas.renderAll();
@@ -157,8 +193,8 @@ const WhiteBoard = () => {
   }, [editor, setItems]);
 
   //connecting to a room
-  const connect = () => {
-    socket.emit("join-room", socket.id);
+  const connect = (roomId) => {
+    socket.emit("join-room", roomId);
     setConnected(true);
   };
 
@@ -212,7 +248,7 @@ const WhiteBoard = () => {
               style={{
                 left: `${user[1].clientX}px`,
                 top: `${user[1].clientY}px`,
-                color: user[1].colour
+                color: user[1].colour,
               }}
             >
               <CiLocationArrow1 className="text-xl" />
@@ -225,4 +261,4 @@ const WhiteBoard = () => {
   );
 };
 
-export default WhiteBoard;
+export default CollaborativeWhiteBoard;

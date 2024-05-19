@@ -3,75 +3,56 @@ import React, {
   useEffect,
   useState,
   useRef,
-  useMemo,
 } from "react";
-import { FabricJSCanvas, useFabricJSEditor } from "fabricjs-react";
+import { FabricJSCanvas } from "fabricjs-react";
 import useMousePosition from "../hooks/useCursorHook";
 import { useUser } from "../contexts/User";
 import { useBoard } from "../contexts/Board";
 
-import ToolsList from "./ToolsList";
+import ToolsList from "../components/ToolsList";
 
-import { CiLocationArrow1 } from "react-icons/ci";
-
-const WhiteBoard = () => {
+const LocalWhiteBoard = () => {
   const { items, tool, setItems, setTool, editor, onReady } = useBoard();
 
-  let log = useRef(true);
+//   let log = useRef(true);
 
-  // Setting an intevalID, for the mousePosition to log, main purpose is to send position to the backend
-  let mousePositionIntervalID = useRef(null);
+  //   Setting an intevalID, for the mousePosition to log, main purpose is to send position to the backend
 
-  const position = useMousePosition();
+  //   let mousePositionIntervalID = useRef(null);
 
-  const { socket } = useUser();
+  //   const position = useMousePosition();
 
-  const [connected, setConnected] = useState(false);
+  //   const { socket } = useUser();
 
-  const [users, setUsers] = useState([]);
+  //   //logging the mouse position with intervals
 
-  //logging the mouse position with intervals
+  //   //don't start a new interval if already it has been set
+  //   if (!mousePositionIntervalID.current) {
+  //     //setting an interval to send position to the backend.
+  //     mousePositionIntervalID.current = setInterval(
+  //       () => (log.current = true),
+  //       200
+  //     );
+  //   }
 
-  //don't start a new interval if already it has been set
-  if (!mousePositionIntervalID.current) {
-    //setting an interval to send position to the backend.
-    mousePositionIntervalID.current = setInterval(
-      () => (log.current = true),
-      200
-    );
-  }
+  //   useEffect(() => {
+  //     if (log.current) {
+  //       // console.log(position);
+  //       socket.emit("hello", position);
+  //       log.current = false;
+  //     }
+  //   }, [position]);
 
-  useEffect(() => {
-    const handleConnect = () => {
-      console.log(socket.id);
-    };
-
-    const handleDisconnect = () => {
-      setConnected(false);
-    };
-
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
-
-    return () => {
-      socket.off("connect", handleConnect);
-    };
-  }, [socket]);
-
-  useEffect(() => {
-    if (log.current) {
-      // console.log(position);
-      socket.emit("hello", position);
-      log.current = false;
-    }
-  }, [position]);
-
+  //TODO:The history array should be either stored in localStorage, and also should be in a useRef as we don't want to empty it everytime we rerender the whiteboard.
   const history = [];
+
   let isWaiting = useRef(false);
 
   const undo = useCallback(() => {
     if (editor.canvas._objects.length > 0) {
       history.push(editor.canvas._objects.pop());
+      localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
+      console.log("item removed");
     }
     editor.canvas.renderAll();
   }, [editor]);
@@ -79,6 +60,7 @@ const WhiteBoard = () => {
   const redo = useCallback(() => {
     if (history.length > 0) {
       editor.canvas.add(history.pop());
+      localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
     }
   }, [editor]);
 
@@ -109,10 +91,18 @@ const WhiteBoard = () => {
   );
 
   //A canvas method to directly do something, whenver any object is added/removed/modified to canvas, save the canvas to the local storage.
-  const handleObjectOperations = useCallback(() => {
-    localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
-    setItems(editor.canvas.toJSON());
-  }, [editor]);
+  const handleObjectOperations = useCallback(
+    (e) => {
+      //TODO: improve the undo redo functionality by developing a action based function that saves the action to the history stack on ctrlz and takes that action out of the history stack and does the effective redo, when ctrly is pressed.
+      //console.log(e);
+
+      localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
+      // history.push(editor.canvas._objects.pop());
+      setItems(editor.canvas.toJSON());
+      console.log("item modified");
+    },
+    [editor]
+  );
 
   useEffect(() => {
     editor?.canvas.on("object:added", handleObjectOperations);
@@ -156,44 +146,8 @@ const WhiteBoard = () => {
     }
   }, [editor, setItems]);
 
-  //connecting to a room
-  const connect = () => {
-    socket.emit("join-room", socket.id);
-    setConnected(true);
-  };
-
-  useEffect(() => {
-    const handleNewUser = (msg) => {
-      console.log(msg);
-    };
-
-    const handlePositionChange = (positions) => {
-      console.log(positions);
-      let finalUsers = positions.filter((e) => e[0] !== socket.id);
-      setUsers(finalUsers);
-    };
-
-    //When a new user connects to the room
-    socket.on("New-User", handleNewUser);
-
-    //When position of any other user in the room changes
-    socket.on("change-position", handlePositionChange);
-
-    return () => {
-      socket.off("New-User", handleNewUser);
-      socket.off("change-position", handlePositionChange);
-    };
-  }, [socket]);
-
   return (
     <>
-      <button
-        onClick={connect}
-        className="bg-black text-white p-2 rounded-3xl m-7"
-      >
-        Connect to the room
-      </button>
-
       <div className="w-full h-full my-7 flex justify-center items-center">
         <ToolsList />
         <div
@@ -204,25 +158,10 @@ const WhiteBoard = () => {
             className="sample-canvas h-full border-green-800 w-full cursor-crosshair bg-gray-50"
             onReady={onReady}
           />
-          {/* //setting up multiple cursors  */}
-          {users.map((user) => (
-            <div
-              key={user[0]} // Assuming `user` has a `socketId` property
-              className={`absolute transition-position duration-100 w-7 h-7 pointer-events-none`}
-              style={{
-                left: `${user[1].clientX}px`,
-                top: `${user[1].clientY}px`,
-                color: user[1].colour
-              }}
-            >
-              <CiLocationArrow1 className="text-xl" />
-              <span className="font-bold">{user[0]}</span>
-            </div>
-          ))}
         </div>
       </div>
     </>
   );
 };
 
-export default WhiteBoard;
+export default LocalWhiteBoard;
