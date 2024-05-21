@@ -1,9 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-  useRef,
-} from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { FabricJSCanvas } from "fabricjs-react";
 import useMousePosition from "../hooks/useCursorHook";
 import { useUser } from "../contexts/User";
@@ -14,7 +9,7 @@ import ToolsList from "../components/ToolsList";
 const LocalWhiteBoard = () => {
   const { items, tool, setItems, setTool, editor, onReady } = useBoard();
 
-//   let log = useRef(true);
+  //   let log = useRef(true);
 
   //   Setting an intevalID, for the mousePosition to log, main purpose is to send position to the backend
 
@@ -92,7 +87,7 @@ const LocalWhiteBoard = () => {
 
   //A canvas method to directly do something, whenver any object is added/removed/modified to canvas, save the canvas to the local storage.
   const handleObjectOperations = useCallback(
-    (e) => {
+    () => {
       //TODO: improve the undo redo functionality by developing a action based function that saves the action to the history stack on ctrlz and takes that action out of the history stack and does the effective redo, when ctrly is pressed.
       //console.log(e);
 

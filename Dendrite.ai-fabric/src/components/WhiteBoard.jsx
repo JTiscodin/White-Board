@@ -13,6 +13,7 @@ import { useBoard } from "../contexts/Board";
 import ToolsList from "./ToolsList";
 
 import { CiLocationArrow1 } from "react-icons/ci";
+import { Button } from "./ui/button";
 
 const WhiteBoard = () => {
   const { items, tool, setItems, setTool, editor, onReady } = useBoard();

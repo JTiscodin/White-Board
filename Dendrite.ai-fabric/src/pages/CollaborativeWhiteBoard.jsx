@@ -37,33 +37,48 @@ const CollaborativeWhiteBoard = () => {
 
   const [users, setUsers] = useState([]);
 
-  const getRoomWithRoomId = async (roomId) => {
-    let response = await fetch(`http://localhost:8000/getRoom/${roomId}`);
+  const isUpdatingRef = useRef(false);
 
-    let room = await response.json();
+  //connecting to a room
+  const connect = useCallback(
+    async (roomId) => {
+      await socket.emit("join-room", roomId);
+      setConnected(true);
+    },
+    [socket]
+  );
 
-    console.log(room.room);
+  const getRoomWithRoomId = useCallback(
+    async (roomId) => {
+      let response = await fetch(`http://localhost:8000/getRoom/${roomId}`);
 
-    setRoom(room.room);
+      let room = await response.json();
 
-    connect()
-  };
+      console.log(JSON.parse(room).canvas);
+
+      await editor?.canvas.loadFromJSON(JSON.parse(room).canvas, () => {
+        editor.canvas.renderAll();
+      });
+
+      setRoom(room.room);
+
+      await connect(roomId);
+    },
+    [editor, connect]
+  );
 
   useEffect(() => {
     getRoomWithRoomId(roomId);
-  }, []);
+    const onUnload = () => {
+      return socket.emit("leave-room", roomId);
+    };
+    window.addEventListener("beforeunload", onUnload);
 
-  useEffect(() => {
-    if (editor && room.canvas) {
-      const loadCanvasData = () => {
-        editor.canvas.loadFromJSON(JSON.parse(room.canvas), () => {
-          editor.canvas.renderAll();
-        });
-      };
-
-      onReady(loadCanvasData);
-    }
-  }, [editor, room, onReady]);
+    return () => {
+      // window.removeEventListener("beforeunload", onUnload);
+      socket.emit("leave-room", roomId);
+    };
+  }, [socket, getRoomWithRoomId, roomId]);
 
   //logging the mouse position with intervals
 
@@ -97,7 +112,7 @@ const CollaborativeWhiteBoard = () => {
   useEffect(() => {
     if (log.current) {
       // console.log(position);
-      socket.emit("hello", position);
+      socket.emit("mouse-position-change", position, roomId);
       log.current = false;
     }
   }, [position]);
@@ -145,10 +160,24 @@ const CollaborativeWhiteBoard = () => {
   );
 
   //A canvas method to directly do something, whenver any object is added/removed/modified to canvas, save the canvas to the local storage.
-  const handleObjectOperations = useCallback(() => {
-    localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
-    setItems(editor.canvas.toJSON());
-  }, [editor]);
+  const handleObjectOperations = useCallback(async () => {
+    if(isUpdatingRef.current){
+      console.log("kisi aur ne badla")
+      return
+    }
+    const newCanvas = editor.canvas.toJSON();
+
+    const isCanvasChanged =
+      JSON.stringify(newCanvas) !== JSON.stringify(room.canvas);
+    if (isCanvasChanged) {
+      await socket.emit("change-in-canvas", newCanvas, roomId);
+      console.log("request bheji");
+      setRoom((prev) => {
+        return { ...prev, canvas: JSON.stringify(newCanvas) };
+      });
+      // localStorage.setItem("items", JSON.stringify(editor?.canvas.toJSON()));
+    }
+  }, [editor, roomId, socket, isUpdatingRef]);
 
   useEffect(() => {
     editor?.canvas.on("object:added", handleObjectOperations);
@@ -160,7 +189,7 @@ const CollaborativeWhiteBoard = () => {
       editor?.canvas.off("object:removed", handleObjectOperations);
       editor?.canvas.off("object:modified", handleObjectOperations);
     };
-  }, [editor, setItems]);
+  }, [editor, setItems, handleObjectOperations]);
 
   //Listening to various keydown events for enabling shortcuts
   useEffect(() => {
@@ -172,7 +201,7 @@ const CollaborativeWhiteBoard = () => {
   }, [handleKeyDown]);
 
   useEffect(() => {
-    if (tool === "pencil") {
+    if (tool === "pencil" && editor) {
       editor.canvas.isDrawingMode = true;
     } else {
       if (editor) {
@@ -180,7 +209,7 @@ const CollaborativeWhiteBoard = () => {
       }
     }
     console.log(tool);
-  }, [tool, setTool]);
+  }, [tool, setTool, editor]);
 
   useEffect(() => {
     const savedState = localStorage.getItem(roomId);
@@ -190,46 +219,110 @@ const CollaborativeWhiteBoard = () => {
         setItems(editor.canvas.toJSON());
       });
     }
-  }, [editor, setItems]);
+  }, [editor, setItems, roomId]);
 
-  //connecting to a room
-  const connect = (roomId) => {
-    socket.emit("join-room", roomId);
-    setConnected(true);
-  };
+  const handleNewUser = useCallback((msg, room) => {
+    console.log(msg);
+  }, []);
+
+  const handlePositionChange = useCallback(
+    async (room) => {
+      let changedRoom = JSON.parse(room);
+      setRoom(changedRoom);
+      let finalUsers = changedRoom.socketAndPositions.filter(
+        (user) => user[0] !== socket.id
+      );
+      setUsers(finalUsers);
+    },
+    [socket.id]
+  );
+
+  const handleUserDisconnection = useCallback((socketID, room) => {
+    console.log("User disconnected " + socketID);
+    setRoom(room);
+    let finalUsers = room.socketAndPositions.filter(
+      (user) => user[0] !== socket.id
+    );
+    setUsers(finalUsers);
+  }, []);
+
+  const handleUserLeft = useCallback(
+    async (user, room) => {
+      console.log(user + " left the room");
+      let changedRoom = JSON.parse(room);
+      setRoom(changedRoom);
+      let finalUsers = changedRoom.socketAndPositions.filter(
+        (user) => user[0] !== socket.id
+      );
+      setUsers(finalUsers);
+    },
+    [socket.id]
+  );
+
+  const handleCanvasUpdation = useCallback(
+    async (room, socketId) => {
+      // if (isUpdatingRef.current) return; // Skip if an update is already being processed
+      // isUpdatingRef.current = true; // Set the isUpdating flag
+
+      // try {
+      //   let finalRoom = await JSON.parse(room);
+      //   const isCanvasChanged = JSON.stringify(finalRoom.canvas) !== JSON.stringify(editor.canvas);
+
+      //   if (isCanvasChanged) {
+      //     await editor?.canvas.loadFromJSON(finalRoom.canvas, async () => {
+      //       await editor.canvas.renderAll();
+      //       console.log("canvas changed");
+      //     });
+      //   }
+      // } finally {
+      //   isUpdatingRef.current = false; // Reset the isUpdating flag
+      // }
+
+      if (socket.id !== socketId) {
+        let finalRoom = await JSON.parse(room);
+        isUpdatingRef.current = true;
+        await editor?.canvas.loadFromJSON(finalRoom.canvas, () => {
+          editor.canvas.renderAll();
+          console.log("canvas changed");
+        });
+
+        isUpdatingRef.current = false;
+        console.log("ha change karna chaiye ");
+      }
+    },
+    [editor]
+  );
 
   useEffect(() => {
-    const handleNewUser = (msg) => {
-      console.log(msg);
-    };
-
-    const handlePositionChange = (positions) => {
-      console.log(positions);
-      let finalUsers = positions.filter((e) => e[0] !== socket.id);
-      setUsers(finalUsers);
-    };
-
     //When a new user connects to the room
     socket.on("New-User", handleNewUser);
 
     //When position of any other user in the room changes
     socket.on("change-position", handlePositionChange);
 
+    socket.on("User-disconnected", handleUserDisconnection);
+
+    socket.on("User-left", handleUserLeft);
+
+    socket.on("updated-canvas", handleCanvasUpdation);
+
     return () => {
       socket.off("New-User", handleNewUser);
       socket.off("change-position", handlePositionChange);
+      socket.off("User-left", handleUserLeft);
+      socket.off("updated-canvas", handleCanvasUpdation);
     };
-  }, [socket]);
+  }, [
+    socket,
+    handleNewUser,
+    handlePositionChange,
+    handleUserLeft,
+    handleUserDisconnection,
+    handleCanvasUpdation,
+  ]);
 
   return (
     <>
-      <button
-        onClick={connect}
-        className="bg-black text-white p-2 rounded-3xl m-7"
-      >
-        Connect to the room
-      </button>
-
       <div className="w-full h-full my-7 flex justify-center items-center">
         <ToolsList />
         <div

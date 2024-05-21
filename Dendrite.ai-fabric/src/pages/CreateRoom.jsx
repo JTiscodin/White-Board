@@ -14,8 +14,6 @@ const CreateRoom = () => {
 
     let rooms = await result.json();
 
-    console.log(rooms.rooms);
-
     setActiveRooms(rooms.rooms);
   };
 
@@ -33,13 +31,17 @@ const CreateRoom = () => {
       body: JSON.stringify({ roomName }),
     });
 
-    let room = await response.json()
+    let room = await response.json();
 
-    console.log(room.room.id)
-
-    if(response.ok){
-        navigate(`/collab/${room.room.id}`)
+    if (response.ok) {
+      navigate(`/collab/${room.room.id}`);
     }
+  };
+
+
+  //Redirecting the user to the room clicked on.
+  const redirectToRoom = (roomId) => {
+    navigate(`/collab/${roomId}`);
   };
 
   return (
@@ -62,8 +64,14 @@ const CreateRoom = () => {
         <h1 className="text-3xl mt-10">Currently available rooms:</h1>
         {activeRooms.map((room) => {
           return (
-            <div key={room.id} className="cursor-pointer m-2">
-              <h1 className="text-xl bg-zinc-800 font-bold text-slate-400 text-center rounded-lg hover:scale-110 duration-100 p-6">{room.name}</h1>
+            <div
+              onClick={() => redirectToRoom(room.id)}
+              key={room.id}
+              className="cursor-pointer m-2"
+            >
+              <h1 className="text-xl bg-zinc-800 font-bold text-slate-400 text-center rounded-lg hover:scale-110 duration-100 p-6">
+                {room.name}
+              </h1>
             </div>
           );
         })}

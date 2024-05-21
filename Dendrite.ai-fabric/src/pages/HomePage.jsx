@@ -10,7 +10,7 @@ const HomePage = () => {
     }
 
     const redirectToCollaborativeBoard = () => {
-        navigate("/collab")
+        navigate("/create-room")
     }
 
   return (

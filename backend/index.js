@@ -47,7 +47,46 @@ const createRoom = (roomName) => {
   let room = {
     id: uuidv4(),
     name: roomName,
-    canvas: "",
+    canvas: {
+      version: "5.3.0",
+      objects: [
+        {
+          type: "rect",
+          version: "5.3.0",
+          originX: "left",
+          originY: "top",
+          left: 259.66,
+          top: 186.85,
+          width: 40,
+          height: 40,
+          fill: "rgba(255, 255, 255, 0.0)",
+          stroke: "#000000",
+          strokeWidth: 1,
+          strokeDashArray: null,
+          strokeLineCap: "butt",
+          strokeDashOffset: 0,
+          strokeLineJoin: "miter",
+          strokeUniform: false,
+          strokeMiterLimit: 4,
+          scaleX: 9.38,
+          scaleY: 7.48,
+          angle: 356.36,
+          flipX: false,
+          flipY: false,
+          opacity: 1,
+          shadow: null,
+          visible: true,
+          backgroundColor: "",
+          fillRule: "nonzero",
+          paintFirst: "fill",
+          globalCompositeOperation: "source-over",
+          skewX: 0,
+          skewY: 0,
+          rx: 0,
+          ry: 0,
+        },
+      ],
+    },
     room_members: [],
     socketAndPositions: new Map(),
   };
@@ -57,48 +96,142 @@ const createRoom = (roomName) => {
 };
 
 io.on("connection", (socket) => {
-  console.log(socket.id);
+  console.log("Socket connected " + socket.id);
 
-  socket.on("hello", (position) => {
-    //Only broadcasting to the room if the user is in the room.
-    if (socketAndPositions.has(socket.id)) {
-      //we need to keep the colour intact, so we only change the positions, not the colour that was set during joining room.
-      let existingSocket = socketAndPositions.get(socket.id);
-      socketAndPositions.set(socket.id, { ...existingSocket, ...position });
+  socket.on("change-in-canvas", (canvas, roomId, socketId) => {
+    rooms.forEach((room) => {
+      if (room.id === roomId && room.canvas !== canvas) {
+        room.canvas = canvas;
+        socket.broadcast.to(room.id).emit(
+          "updated-canvas",
+          JSON.stringify({
+            ...room,
+            socketAndPositions: Array.from(room.socketAndPositions.entries),
+          }),
+          socketId
+        );
+        return;
+      }
+    });
+  });
 
-      //Converting the Map to a tranferable format, we need to send it to frontend everytime a user is moves the cursor.
-      const myMap = Array.from(socketAndPositions.entries());
-      socket.broadcast.to("collab").emit("change-position", myMap);
-    }
+  socket.on("mouse-position-change", (position, roomId) => {
+    //finding the room and changing the socket positions
+    rooms.forEach((room) => {
+      //Only broadcasting to the room if the user is in the room.
+
+      if (room.id === roomId) {
+        if (room.socketAndPositions.has(socket.id)) {
+          let existingSocket = room.socketAndPositions.get(socket.id);
+
+          //we need to keep the colour intact, so we only change the positions, not the colour that was set during joining room.
+          room.socketAndPositions.set(socket.id, {
+            ...existingSocket,
+            ...position,
+          });
+
+          socket.broadcast.to(roomId).emit(
+            "change-position",
+            JSON.stringify({
+              ...room,
+              socketAndPositions: Array.from(room.socketAndPositions.entries()),
+            })
+          );
+        }
+      }
+    });
+
+    // if (socketAndPositions.has(socket.id)) {
+    //   let existingSocket = socketAndPositions.get(socket.id);
+    //   socketAndPositions.set(socket.id, { ...existingSocket, ...position });
+
+    //   //Converting the Map to a tranferable format, we need to send it to frontend everytime a user is moves the cursor.
+    //   const myMap = Array.from(socketAndPositions.entries());
+    // }
   });
 
   //letting the sockets join a room
   socket.on("join-room", (roomId) => {
+    rooms.forEach((room) => {
+      if (room.id === roomId) {
+        if (!room.room_members.includes(socket.id))
+          room.room_members.push(socket.id);
+        socket.join(roomId);
 
-    console.log(roomId)
+        room.socketAndPositions.set(socket.id, {
+          clientX: 0,
+          clientY: 0,
+          colour: getRandomColor(),
+        });
 
-    // socket.join(roomId);
-    let targetRoom = rooms.find((room) => room.id === roomId)
-
-    // console.log(targetRoom)
-
-    // targetRoom.room_members.push(socket.id);
-
-    // rooms.forEach((room,i) => {})
-
-    socketAndPositions.set(socket.id, {
-      ClientX: 0,
-      ClientY: 0,
-      colour: getRandomColor(),
+        socket.broadcast
+          .to(roomId)
+          .emit(
+            "New-User",
+            "New User Connected " + socket.id,
+            JSON.stringify(room)
+          );
+        return;
+      }
     });
-    io.to("collab").emit(
-      "New-User",
-      "New User Connected " + socket.id,
-      room_members
-    );
   });
 
+  socket.on("leave-room", (roomId) => {
+    rooms.forEach((room) => {
+      if (room.id === roomId) {
+        if (room.room_members.includes(socket.id)) {
+          room.room_members = room.room_members.filter(
+            (member) => member !== socket.id
+          );
+
+          room.socketAndPositions.delete(socket.id);
+
+          socket.leave(room.id);
+
+          io.to(room.id).emit(
+            "User-left",
+            socket.id,
+            JSON.stringify({
+              ...room,
+              socketAndPositions: Array.from(room.socketAndPositions.entries()),
+            })
+          );
+          return;
+        }
+      }
+    });
+  });
+
+  //Special Disconnecting event
+  socket.on("disconnecting", () => {
+    //Removing the user from the specified room.
+
+    let socket_rooms = Array.from(socket.rooms, (value) => value);
+    if (!!socket_rooms[1]) {
+      rooms.forEach((room) => {
+        if (room.id === socket_rooms[1]) {
+          room.room_members = room.room_members.filter(
+            (member) => member !== socket.id
+          );
+          socket.leave(room.id);
+
+          io.to(room.id).emit(
+            "User-disconnected",
+            socket.id,
+            JSON.stringify({
+              ...room,
+              socketAndPositions: Array.from(room.socketAndPositions.entries()),
+            })
+          );
+          return;
+        }
+      });
+    }
+  });
+
+  //Handle the disconnection logic here.
   socket.on("disconnect", () => {
+    console.log("disconnected " + socket.id);
     room_members = room_members.filter((e) => e !== socket.id);
     socketAndPositions.delete(socket.id);
   });
@@ -122,7 +255,12 @@ app.get("/activeRooms", (req, res) => {
 app.get("/getRoom/:roomId", (req, res) => {
   const { roomId } = req.params;
   const room = rooms.find((room) => room.id === roomId);
-  res.json({ room });
+  res.json(
+    JSON.stringify({
+      ...room,
+      socketAndPositions: Array.from(room.socketAndPositions.entries()),
+    })
+  );
 });
 
 httpServer.listen(8000, () => {
