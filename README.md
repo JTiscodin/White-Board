@@ -31,5 +31,6 @@ Setting up the project.
     
 ## Demo
 
-Insert gif or link to demo
+![Collaborative-Whiteboard-ezgif com-video-to-gif-converter (1)](https://github.com/JTiscodin/White-Board/assets/113091818/0eee79ca-308b-4dd0-a75d-da0ec50a6bd7)
+
 
