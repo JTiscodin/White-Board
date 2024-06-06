@@ -9,55 +9,26 @@ import ToolsList from "../components/ToolsList";
 const LocalWhiteBoard = () => {
   const { items, tool, setItems, setTool, editor, onReady } = useBoard();
 
-  //   let log = useRef(true);
-
-  //   Setting an intevalID, for the mousePosition to log, main purpose is to send position to the backend
-
-  //   let mousePositionIntervalID = useRef(null);
-
-  //   const position = useMousePosition();
-
-  //   const { socket } = useUser();
-
-  //   //logging the mouse position with intervals
-
-  //   //don't start a new interval if already it has been set
-  //   if (!mousePositionIntervalID.current) {
-  //     //setting an interval to send position to the backend.
-  //     mousePositionIntervalID.current = setInterval(
-  //       () => (log.current = true),
-  //       200
-  //     );
-  //   }
-
-  //   useEffect(() => {
-  //     if (log.current) {
-  //       // console.log(position);
-  //       socket.emit("hello", position);
-  //       log.current = false;
-  //     }
-  //   }, [position]);
-
   //TODO:The history array should be either stored in localStorage, and also should be in a useRef as we don't want to empty it everytime we rerender the whiteboard.
-  const history = [];
+  const history = useRef([]);
 
   let isWaiting = useRef(false);
 
   const undo = useCallback(() => {
-    if (editor.canvas._objects.length > 0) {
-      history.push(editor.canvas._objects.pop());
+    if (editor?.canvas._objects.length > 0) {
+      history.current.push(editor.canvas._objects.pop());
       localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
       console.log("item removed");
     }
     editor.canvas.renderAll();
-  }, [editor]);
+  }, [editor, history]);
 
   const redo = useCallback(() => {
-    if (history.length > 0) {
-      editor.canvas.add(history.pop());
+    if (history.current.length > 0) {
+      editor.canvas.add(history.current.pop());
       localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
     }
-  }, [editor]);
+  }, [editor, history]);
 
   // Handling Keydown functions below, undo => Ctrl + z, redo => ctrl + y and other stuff
 
@@ -80,7 +51,7 @@ const LocalWhiteBoard = () => {
         if (activeObject) {
           editor?.deleteSelected();
         }
-      } 
+      }
     },
     [undo, redo, editor]
   );
@@ -105,21 +76,24 @@ const LocalWhiteBoard = () => {
     };
   }, [editor, setItems, handleObjectOperations]);
 
-  const handleZoom = (e) => {
-    if (!e.altKey) return;
-    let zoom = editor?.canvas.getZoom();
-    const delta = Math.sign(e.deltaY);
-    const zoomFactor = 0.1;
-    if (delta > 0) {
-      editor?.canvas.setZoom((zoom -= zoomFactor));
-    } else {
-      editor?.canvas.setZoom((zoom += zoomFactor));
-    }
-  };
+  const handleZoom = useCallback(
+    (e) => {
+      if (!e.altKey) return;
+      let zoom = editor?.canvas.getZoom();
+      const delta = Math.sign(e.deltaY);
+      const zoomFactor = 0.1;
+      if (delta > 0) {
+        editor?.canvas.setZoom((zoom -= zoomFactor));
+      } else {
+        editor?.canvas.setZoom((zoom += zoomFactor));
+      }
+    },
+    [editor]
+  );
 
   //Listening to various keydown events for enabling shortcuts
   useEffect(() => {
-    const canvas = document.getElementById("white-board")
+    const canvas = document.getElementById("white-board");
     document.addEventListener("keydown", handleKeyDown);
 
     canvas.addEventListener("wheel", handleZoom);
@@ -128,7 +102,7 @@ const LocalWhiteBoard = () => {
       document.removeEventListener("keydown", handleKeyDown);
       canvas.removeEventListener("wheel", handleZoom);
     };
-  }, [handleKeyDown, editor]);
+  }, [handleKeyDown, editor, handleZoom]);
 
   useEffect(() => {
     if (tool === "pencil") {

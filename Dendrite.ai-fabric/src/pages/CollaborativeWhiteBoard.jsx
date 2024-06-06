@@ -161,9 +161,9 @@ const CollaborativeWhiteBoard = () => {
 
   //A canvas method to directly do something, whenver any object is added/removed/modified to canvas, save the canvas to the local storage.
   const handleObjectOperations = useCallback(async () => {
-    if(isUpdatingRef.current){
-      console.log("kisi aur ne badla")
-      return
+    if (isUpdatingRef.current) {
+      console.log("kisi aur ne badla");
+      return;
     }
     const newCanvas = editor.canvas.toJSON();
 
@@ -191,14 +191,33 @@ const CollaborativeWhiteBoard = () => {
     };
   }, [editor, setItems, handleObjectOperations]);
 
+  const handleZoom = useCallback(
+    (e) => {
+      if (!e.altKey) return;
+      let zoom = editor?.canvas.getZoom();
+      const delta = Math.sign(e.deltaY);
+      const zoomFactor = 0.1;
+      if (delta > 0) {
+        editor?.canvas.setZoom((zoom -= zoomFactor));
+      } else {
+        editor?.canvas.setZoom((zoom += zoomFactor));
+      }
+    },
+    [editor]
+  );
+
   //Listening to various keydown events for enabling shortcuts
   useEffect(() => {
+    const canvas = document.getElementById("white-board");
     document.addEventListener("keydown", handleKeyDown);
+
+    canvas.addEventListener("wheel", handleZoom);
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
+      canvas.removeEventListener("wheel", handleZoom);
     };
-  }, [handleKeyDown]);
+  }, [handleKeyDown, editor, handleZoom]);
 
   useEffect(() => {
     if (tool === "pencil" && editor) {
@@ -261,23 +280,6 @@ const CollaborativeWhiteBoard = () => {
 
   const handleCanvasUpdation = useCallback(
     async (room, socketId) => {
-      // if (isUpdatingRef.current) return; // Skip if an update is already being processed
-      // isUpdatingRef.current = true; // Set the isUpdating flag
-
-      // try {
-      //   let finalRoom = await JSON.parse(room);
-      //   const isCanvasChanged = JSON.stringify(finalRoom.canvas) !== JSON.stringify(editor.canvas);
-
-      //   if (isCanvasChanged) {
-      //     await editor?.canvas.loadFromJSON(finalRoom.canvas, async () => {
-      //       await editor.canvas.renderAll();
-      //       console.log("canvas changed");
-      //     });
-      //   }
-      // } finally {
-      //   isUpdatingRef.current = false; // Reset the isUpdating flag
-      // }
-
       if (socket.id !== socketId) {
         let finalRoom = await JSON.parse(room);
         isUpdatingRef.current = true;
@@ -290,7 +292,7 @@ const CollaborativeWhiteBoard = () => {
         console.log("ha change karna chaiye ");
       }
     },
-    [editor]
+    [editor, socket.id]
   );
 
   useEffect(() => {
