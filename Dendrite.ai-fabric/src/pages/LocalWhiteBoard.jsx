@@ -113,7 +113,7 @@ const LocalWhiteBoard = () => {
       }
     }
     console.log(tool);
-  }, [tool, setTool]);
+  }, [tool, setTool, editor]);
 
   useEffect(() => {
     const savedState = localStorage.getItem("items");

@@ -19,7 +19,7 @@ const App = () => {
           <Routes>
             <Route path="/draw" element={<LocalWhiteBoard />} />
             <Route path="/" element={<HomePage />} />
-            <Route path="/test" element={<CollaborativeWhiteBoard />} />
+            <Route path="/test" element={<WhiteBoard />} />
             <Route path="/collab/:roomId" element={<CollaborativeWhiteBoard />} />
             <Route path="/create-room" element={<CreateRoom />} />
           </Routes>

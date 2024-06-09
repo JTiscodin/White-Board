@@ -72,6 +72,8 @@ const CollaborativeWhiteBoard = () => {
     const onUnload = () => {
       return socket.emit("leave-room", roomId);
     };
+
+    //Emitting "leave-room" a user refreshes the page / Or leaves the page
     window.addEventListener("beforeunload", onUnload);
 
     return () => {

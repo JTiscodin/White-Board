@@ -11,7 +11,7 @@ import { useUser } from "../contexts/User";
 import { useBoard } from "../contexts/Board";
 
 import ToolsList from "./ToolsList";
-
+import { useDebounce } from "@/hooks/useDebounceHook";
 import { CiLocationArrow1 } from "react-icons/ci";
 import { Button } from "./ui/button";
 
@@ -25,11 +25,17 @@ const WhiteBoard = () => {
 
   const position = useMousePosition();
 
-  const { socket } = useUser();
+  // const { socket } = useUser();
 
   const [connected, setConnected] = useState(false);
 
   const [users, setUsers] = useState([]);
+
+  const history = useRef([]);
+
+  const recoveryStack = useRef([]);
+
+  const isKeyDown = useRef(false);
 
   //logging the mouse position with intervals
 
@@ -42,63 +48,58 @@ const WhiteBoard = () => {
     );
   }
 
-  useEffect(() => {
-    const handleConnect = () => {
-      console.log(socket.id);
-    };
+  // useEffect(() => {
+  //   const handleConnect = () => {
+  //     console.log(socket.id);
+  //   };
 
-    const handleDisconnect = () => {
-      setConnected(false);
-    };
+  //   const handleDisconnect = () => {
+  //     setConnected(false);
+  //   };
 
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
+  //   socket.on("connect", handleConnect);
+  //   socket.on("disconnect", handleDisconnect);
 
-    return () => {
-      socket.off("connect", handleConnect);
-    };
-  }, [socket]);
+  //   return () => {
+  //     socket.off("connect", handleConnect);
+  //   };
+  // }, [socket]);
 
-  useEffect(() => {
-    if (log.current) {
-      // console.log(position);
-      socket.emit("hello", position);
-      log.current = false;
-    }
-  }, [position]);
-
-  const history = [];
   let isWaiting = useRef(false);
 
   const undo = useCallback(() => {
-    if (editor.canvas._objects.length > 0) {
-      history.push(editor.canvas._objects.pop());
+    if (history.current.length > 1) {
+      isKeyDown.current = true;
+      console.log(history.current.length);
+      let task = history.current.pop();
+      recoveryStack.current.push(task);
+      editor?.canvas.loadFromJSON(
+        JSON.parse(history.current[history.current.length - 1].canvas || history.current[history.current.length]),
+        () => {
+          editor.canvas.renderAll();
+          isKeyDown.current = false;
+        }
+      );
     }
-    editor.canvas.renderAll();
   }, [editor]);
 
   const redo = useCallback(() => {
-    if (history.length > 0) {
-      editor.canvas.add(history.pop());
+    if (history.current.length > 0) {
+      editor.canvas.add(history.current.pop());
     }
   }, [editor]);
 
   // Handling Keydown functions below, undo => Ctrl + z, redo => ctrl + y and other stuff
 
+  let debouncedUndo = useDebounce(undo, 200);
+  let debouncedRedo = useDebounce(redo, 300);
+
   const handleKeyDown = useCallback(
     (e) => {
       if (e.key === "z" && e.ctrlKey && !isWaiting.current) {
-        isWaiting.current = true;
-        setTimeout(() => {
-          isWaiting.current = false;
-        }, 200);
-        undo();
+        debouncedUndo();
       } else if (e.key === "y" && e.ctrlKey && !isWaiting.current) {
-        isWaiting.current = true;
-        setTimeout(() => {
-          isWaiting.current = false;
-        }, 200);
-        redo();
+        debouncedRedo();
       } else if (e.key === "Delete" && editor) {
         const activeObject = editor.canvas.getActiveObject();
         if (activeObject) {
@@ -106,18 +107,38 @@ const WhiteBoard = () => {
         }
       }
     },
-    [undo, redo, editor]
+    [editor, debouncedRedo, debouncedUndo]
   );
 
   //A canvas method to directly do something, whenver any object is added/removed/modified to canvas, save the canvas to the local storage.
-  const handleObjectOperations = useCallback(() => {
-    localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
-    setItems(editor.canvas.toJSON());
-  }, [editor]);
+  const handleObjectOperations = useCallback(
+    (e, msg) => {
+      if (!isKeyDown.current) {
+        // Check flag
+        const newState = {
+          action: msg || e.action,
+          canvas: JSON.stringify(editor.canvas.toJSON()),
+        };
+        history.current.push(newState);
+        console.log("Did push");
+        recoveryStack.current = []; // Clear the redo stack
+      } else {
+        console.log("Didn't pushed");
+      }
+
+      console.log(history.current);
+
+      localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
+      // setItems(editor.canvas.toJSON());
+    },
+    [editor]
+  );
 
   useEffect(() => {
-    editor?.canvas.on("object:added", handleObjectOperations);
-    editor?.canvas.on("object:removed", handleObjectOperations);
+    editor?.canvas.on("object:added", (e) => handleObjectOperations(e, "add"));
+    editor?.canvas.on("object:removed", (e) =>
+      handleObjectOperations(e, "deleted")
+    );
     editor?.canvas.on("object:modified", handleObjectOperations);
 
     return () => {
@@ -125,7 +146,7 @@ const WhiteBoard = () => {
       editor?.canvas.off("object:removed", handleObjectOperations);
       editor?.canvas.off("object:modified", handleObjectOperations);
     };
-  }, [editor, setItems]);
+  }, [editor, setItems, handleObjectOperations]);
 
   //Listening to various keydown events for enabling shortcuts
   useEffect(() => {
@@ -145,7 +166,7 @@ const WhiteBoard = () => {
       }
     }
     console.log(tool);
-  }, [tool, setTool]);
+  }, [tool, setTool, editor]);
 
   useEffect(() => {
     const savedState = localStorage.getItem("items");
@@ -157,44 +178,8 @@ const WhiteBoard = () => {
     }
   }, [editor, setItems]);
 
-  //connecting to a room
-  const connect = () => {
-    socket.emit("join-room", socket.id);
-    setConnected(true);
-  };
-
-  useEffect(() => {
-    const handleNewUser = (msg) => {
-      console.log(msg);
-    };
-
-    const handlePositionChange = (positions) => {
-      console.log(positions);
-      let finalUsers = positions.filter((e) => e[0] !== socket.id);
-      setUsers(finalUsers);
-    };
-
-    //When a new user connects to the room
-    socket.on("New-User", handleNewUser);
-
-    //When position of any other user in the room changes
-    socket.on("change-position", handlePositionChange);
-
-    return () => {
-      socket.off("New-User", handleNewUser);
-      socket.off("change-position", handlePositionChange);
-    };
-  }, [socket]);
-
   return (
     <>
-      <button
-        onClick={connect}
-        className="bg-black text-white p-2 rounded-3xl m-7"
-      >
-        Connect to the room
-      </button>
-
       <div className="w-full h-full my-7 flex justify-center items-center">
         <ToolsList />
         <div
@@ -213,7 +198,7 @@ const WhiteBoard = () => {
               style={{
                 left: `${user[1].clientX}px`,
                 top: `${user[1].clientY}px`,
-                color: user[1].colour
+                color: user[1].colour,
               }}
             >
               <CiLocationArrow1 className="text-xl" />
