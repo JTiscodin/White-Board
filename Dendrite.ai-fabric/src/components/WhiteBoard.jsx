@@ -13,7 +13,7 @@ import { useBoard } from "../contexts/Board";
 import ToolsList from "./ToolsList";
 import { useDebounce } from "@/hooks/useDebounceHook";
 import { CiLocationArrow1 } from "react-icons/ci";
-import { Button } from "./ui/button";
+import { useHistory } from "@/hooks/useHistory";
 
 const WhiteBoard = () => {
   const { items, tool, setItems, setTool, editor, onReady } = useBoard();
@@ -27,13 +27,11 @@ const WhiteBoard = () => {
 
   // const { socket } = useUser();
 
-  const [connected, setConnected] = useState(false);
+  
 
   const [users, setUsers] = useState([]);
 
-  const history = useRef([]);
-
-  const recoveryStack = useRef([]);
+  const [history, recoveryStack] = useHistory()
 
   const isKeyDown = useRef(false);
 
@@ -47,23 +45,6 @@ const WhiteBoard = () => {
       200
     );
   }
-
-  // useEffect(() => {
-  //   const handleConnect = () => {
-  //     console.log(socket.id);
-  //   };
-
-  //   const handleDisconnect = () => {
-  //     setConnected(false);
-  //   };
-
-  //   socket.on("connect", handleConnect);
-  //   socket.on("disconnect", handleDisconnect);
-
-  //   return () => {
-  //     socket.off("connect", handleConnect);
-  //   };
-  // }, [socket]);
 
   let isWaiting = useRef(false);
 
@@ -81,18 +62,26 @@ const WhiteBoard = () => {
         }
       );
     }
-  }, [editor]);
+  }, [editor, history,recoveryStack]);
 
   const redo = useCallback(() => {
-    if (history.current.length > 0) {
-      editor.canvas.add(history.current.pop());
+    if (recoveryStack.current.length > 0) {
+      isKeyDown.current = true
+      let recoveredTask = recoveryStack.current.pop()
+      history.current.push(recoveredTask)
+      editor?.canvas.loadFromJSON(
+        JSON.parse(recoveredTask.canvas), () => {
+          editor.canvas.renderAll()
+          isKeyDown.current=false
+        }
+      )
     }
-  }, [editor]);
+  }, [editor, history, recoveryStack]);
 
   // Handling Keydown functions below, undo => Ctrl + z, redo => ctrl + y and other stuff
 
-  let debouncedUndo = useDebounce(undo, 200);
-  let debouncedRedo = useDebounce(redo, 300);
+  let debouncedUndo = useDebounce(undo, 50);
+  let debouncedRedo = useDebounce(redo, 50);
 
   const handleKeyDown = useCallback(
     (e) => {
@@ -131,7 +120,7 @@ const WhiteBoard = () => {
       localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
       // setItems(editor.canvas.toJSON());
     },
-    [editor]
+    [editor, history, recoveryStack]
   );
 
   useEffect(() => {

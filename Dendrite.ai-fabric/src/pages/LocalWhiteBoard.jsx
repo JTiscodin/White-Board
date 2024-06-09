@@ -5,47 +5,59 @@ import { useUser } from "../contexts/User";
 import { useBoard } from "../contexts/Board";
 
 import ToolsList from "../components/ToolsList";
+import { useHistory } from "@/hooks/useHistory";
+import { useDebounce } from "@/hooks/useDebounceHook";
 
 const LocalWhiteBoard = () => {
   const { items, tool, setItems, setTool, editor, onReady } = useBoard();
 
   //TODO:The history array should be either stored in localStorage, and also should be in a useRef as we don't want to empty it everytime we rerender the whiteboard.
-  const history = useRef([]);
+  const [history, recoveryStack, isKeyDown] = useHistory();
 
   let isWaiting = useRef(false);
 
   const undo = useCallback(() => {
-    if (editor?.canvas._objects.length > 0) {
-      history.current.push(editor.canvas._objects.pop());
-      localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
-      console.log("item removed");
+    if (history.current.length > 1) {
+      isKeyDown.current = true;
+      console.log(history.current.length);
+      let task = history.current.pop();
+      recoveryStack.current.push(task);
+      editor?.canvas.loadFromJSON(
+        JSON.parse(
+          history.current[history.current.length - 1].canvas ||
+            history.current[history.current.length]
+        ),
+        () => {
+          editor.canvas.renderAll();
+          isKeyDown.current = false;
+        }
+      );
     }
-    editor.canvas.renderAll();
-  }, [editor, history]);
+  }, [editor, history, recoveryStack, isKeyDown]);
 
   const redo = useCallback(() => {
-    if (history.current.length > 0) {
-      editor.canvas.add(history.current.pop());
-      localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
+    if (recoveryStack.current.length > 0) {
+      isKeyDown.current = true;
+      let recoveredTask = recoveryStack.current.pop();
+      history.current.push(recoveredTask);
+      editor?.canvas.loadFromJSON(JSON.parse(recoveredTask.canvas), () => {
+        editor.canvas.renderAll();
+        isKeyDown.current = false;
+      });
     }
-  }, [editor, history]);
+  }, [editor, history, recoveryStack, isKeyDown]);
+
+  const debouncedRedo = useDebounce(redo, 50);
+  const debouncedUndo = useDebounce(undo, 50);
 
   // Handling Keydown functions below, undo => Ctrl + z, redo => ctrl + y and other stuff
 
   const handleKeyDown = useCallback(
     (e) => {
       if (e.key === "z" && e.ctrlKey && !isWaiting.current) {
-        isWaiting.current = true;
-        setTimeout(() => {
-          isWaiting.current = false;
-        }, 200);
-        undo();
+        debouncedUndo();
       } else if (e.key === "y" && e.ctrlKey && !isWaiting.current) {
-        isWaiting.current = true;
-        setTimeout(() => {
-          isWaiting.current = false;
-        }, 200);
-        redo();
+        debouncedRedo();
       } else if (e.key === "Delete" && editor) {
         const activeObject = editor.canvas.getActiveObject();
         if (activeObject) {
@@ -53,22 +65,40 @@ const LocalWhiteBoard = () => {
         }
       }
     },
-    [undo, redo, editor]
+    [editor, debouncedRedo, debouncedUndo]
   );
 
   //A canvas method to directly do something, whenver any object is added/removed/modified to canvas, save the canvas to the local storage.
-  const handleObjectOperations = useCallback(() => {
-    //TODO: improve the undo redo functionality by developing a action based function that saves the action to the history stack on ctrlz and takes that action out of the history stack and does the effective redo, when ctrly is pressed.
-    //console.log(e);
+  const handleObjectOperations = useCallback(
+    (e, msg) => {
+      if (!isKeyDown.current) {
+        // Check flag
+        const newState = {
+          action: msg || e.action,
+          canvas: JSON.stringify(editor.canvas.toJSON()),
+        };
+        history.current.push(newState);
+        console.log("Did push");
+        recoveryStack.current = []; // Clear the redo stack
+      } else {
+        console.log("Didn't pushed");
+      }
 
-    localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
-    console.log("item modified");
-  }, [editor]);
+      console.log(history.current);
+
+      localStorage.setItem("items", JSON.stringify(editor.canvas.toJSON()));
+      // setItems(editor.canvas.toJSON());
+    },
+    [editor, history, recoveryStack, isKeyDown]
+  );
 
   useEffect(() => {
-    editor?.canvas.on("object:added", handleObjectOperations);
-    editor?.canvas.on("object:removed", handleObjectOperations);
+    editor?.canvas.on("object:added", (e) => handleObjectOperations(e, "add"));
+    editor?.canvas.on("object:removed", (e) =>
+      handleObjectOperations(e, "deleted")
+    );
     editor?.canvas.on("object:modified", handleObjectOperations);
+
     return () => {
       editor?.canvas.off("object:added", handleObjectOperations);
       editor?.canvas.off("object:removed", handleObjectOperations);

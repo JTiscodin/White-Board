@@ -10,10 +10,11 @@ import useMousePosition from "../hooks/useCursorHook";
 import { useUser } from "../contexts/User";
 import { useParams } from "react-router-dom";
 import { useBoard } from "../contexts/Board";
-
+import { useDebounce } from "@/hooks/useDebounceHook";
 import ToolsList from "../components/ToolsList";
 
 import { CiLocationArrow1 } from "react-icons/ci";
+import { useHistory } from "@/hooks/useHistory";
 
 const CollaborativeWhiteBoard = () => {
   const { items, tool, setItems, setTool, editor, onReady } = useBoard();
@@ -34,6 +35,8 @@ const CollaborativeWhiteBoard = () => {
   const { socket } = useUser();
 
   const [connected, setConnected] = useState(false);
+
+  const [history, recoveryStack, isKeyDown] = useHistory();
 
   const [users, setUsers] = useState([]);
 
@@ -117,40 +120,52 @@ const CollaborativeWhiteBoard = () => {
       socket.emit("mouse-position-change", position, roomId);
       log.current = false;
     }
-  }, [position]);
+  }, [position, roomId, socket]);
 
-  const history = [];
   let isWaiting = useRef(false);
 
   const undo = useCallback(() => {
-    if (editor.canvas._objects.length > 0) {
-      history.push(editor.canvas._objects.pop());
+    if (history.current.length > 1) {
+      isKeyDown.current = true;
+      console.log(history.current.length);
+      let task = history.current.pop();
+      recoveryStack.current.push(task);
+      editor?.canvas.loadFromJSON(
+        JSON.parse(
+          history.current[history.current.length - 1].canvas ||
+            history.current[history.current.length]
+        ),
+        () => {
+          editor.canvas.renderAll();
+          isKeyDown.current = false;
+        }
+      );
     }
-    editor.canvas.renderAll();
-  }, [editor]);
+  }, [editor, history, recoveryStack, isKeyDown]);
 
   const redo = useCallback(() => {
-    if (history.length > 0) {
-      editor.canvas.add(history.pop());
+    if (recoveryStack.current.length > 0) {
+      isKeyDown.current = true;
+      let recoveredTask = recoveryStack.current.pop();
+      history.current.push(recoveredTask);
+      editor?.canvas.loadFromJSON(JSON.parse(recoveredTask.canvas), () => {
+        editor.canvas.renderAll();
+        isKeyDown.current = false;
+      });
     }
-  }, [editor]);
+  }, [editor, history, recoveryStack, isKeyDown]);
+
+  const debouncedRedo = useDebounce(redo, 50);
+  const debouncedUndo = useDebounce(undo, 50);
 
   // Handling Keydown functions below, undo => Ctrl + z, redo => ctrl + y and other stuff
 
   const handleKeyDown = useCallback(
     (e) => {
       if (e.key === "z" && e.ctrlKey && !isWaiting.current) {
-        isWaiting.current = true;
-        setTimeout(() => {
-          isWaiting.current = false;
-        }, 200);
-        undo();
+        debouncedUndo();
       } else if (e.key === "y" && e.ctrlKey && !isWaiting.current) {
-        isWaiting.current = true;
-        setTimeout(() => {
-          isWaiting.current = false;
-        }, 200);
-        redo();
+        debouncedRedo();
       } else if (e.key === "Delete" && editor) {
         const activeObject = editor.canvas.getActiveObject();
         if (activeObject) {
@@ -158,32 +173,59 @@ const CollaborativeWhiteBoard = () => {
         }
       }
     },
-    [undo, redo, editor]
+    [editor, debouncedRedo, debouncedUndo]
   );
 
   //A canvas method to directly do something, whenver any object is added/removed/modified to canvas, save the canvas to the local storage.
-  const handleObjectOperations = useCallback(async () => {
-    if (isUpdatingRef.current) {
-      console.log("kisi aur ne badla");
-      return;
-    }
-    const newCanvas = editor.canvas.toJSON();
+  const handleObjectOperations = useCallback(
+    async (e, msg) => {
+      if (isUpdatingRef.current) {
+        console.log("kisi aur ne badla");
+        return;
+      }
+      const newCanvas = editor.canvas.toJSON();
 
-    const isCanvasChanged =
-      JSON.stringify(newCanvas) !== JSON.stringify(room.canvas);
-    if (isCanvasChanged) {
-      await socket.emit("change-in-canvas", newCanvas, roomId);
-      console.log("request bheji");
-      setRoom((prev) => {
-        return { ...prev, canvas: JSON.stringify(newCanvas) };
-      });
-      // localStorage.setItem("items", JSON.stringify(editor?.canvas.toJSON()));
-    }
-  }, [editor, roomId, socket, isUpdatingRef]);
+      const isCanvasChanged =
+        JSON.stringify(newCanvas) !== JSON.stringify(room.canvas);
+      if (isCanvasChanged) {
+        if (!isKeyDown.current) {
+          // Check flag
+          const newState = {
+            action: msg || e.action,
+            canvas: JSON.stringify(editor.canvas.toJSON()),
+          };
+          history.current.push(newState);
+          console.log("Did push");
+          recoveryStack.current = []; // Clear the redo stack
+        } else {
+          console.log("Didn't pushed");
+        }
+        // setItems(editor.canvas.toJSON());
+        await socket.emit("change-in-canvas", newCanvas, roomId);
+        console.log("request bheji");
+        setRoom((prev) => {
+          return { ...prev, canvas: JSON.stringify(newCanvas) };
+        });
+        // localStorage.setItem("items", JSON.stringify(editor?.canvas.toJSON()));
+      }
+    },
+    [
+      editor,
+      roomId,
+      socket,
+      isUpdatingRef,
+      history,
+      recoveryStack,
+      isKeyDown,
+      room?.canvas,
+    ]
+  );
 
   useEffect(() => {
-    editor?.canvas.on("object:added", handleObjectOperations);
-    editor?.canvas.on("object:removed", handleObjectOperations);
+    editor?.canvas.on("object:added", (e) => handleObjectOperations(e, "add"));
+    editor?.canvas.on("object:removed", (e) =>
+      handleObjectOperations(e, "deleted")
+    );
     editor?.canvas.on("object:modified", handleObjectOperations);
 
     return () => {
