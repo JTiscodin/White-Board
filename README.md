@@ -4,7 +4,14 @@
 The project is a collaborative whiteboard, that has  a room based system to let the user collaborate on a whiteboard.
 
 
+## Features
 
+ - Personal Whiteboard
+ - Collaborative Whiteboard (With Multiple Cursors)
+ - Undo/Redo (With debounce)
+ - Zoom In and Out (Use alt + scroll)
+ - Tools - Rectangle, Pencil (More to be added)
+ - Text - Can add and manipulate text
 
 
 ## Project Setup
