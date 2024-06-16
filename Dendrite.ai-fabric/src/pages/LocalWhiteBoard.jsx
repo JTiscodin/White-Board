@@ -157,8 +157,7 @@ const LocalWhiteBoard = () => {
 
   return (
     <>
-      <div className="w-full h-full my-7 flex justify-center items-center">
-        <ToolsList />
+      <div className="w-full h-full my-7 flex flex-col md:flex md:flex-row justify-evenly gap-4 items-center">
         <div
           id="white-board"
           className="flex  relative justify-center items-center rounded-2xl w-[80vw] h-[90vh] overflow-hidden border-2"
@@ -168,6 +167,7 @@ const LocalWhiteBoard = () => {
             onReady={onReady}
           />
         </div>
+        <ToolsList />
       </div>
     </>
   );

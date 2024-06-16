@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-  useRef,
-  useMemo,
-} from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { FabricJSCanvas, useFabricJSEditor } from "fabricjs-react";
 import useMousePosition from "../hooks/useCursorHook";
 import { useUser } from "../contexts/User";
@@ -122,8 +116,6 @@ const CollaborativeWhiteBoard = () => {
     }
   }, [position, roomId, socket]);
 
-  let isWaiting = useRef(false);
-
   const undo = useCallback(() => {
     if (history.current.length > 1) {
       isKeyDown.current = true;
@@ -162,9 +154,9 @@ const CollaborativeWhiteBoard = () => {
 
   const handleKeyDown = useCallback(
     (e) => {
-      if (e.key === "z" && e.ctrlKey && !isWaiting.current) {
+      if (e.key === "z" && e.ctrlKey) {
         debouncedUndo();
-      } else if (e.key === "y" && e.ctrlKey && !isWaiting.current) {
+      } else if (e.key === "y" && e.ctrlKey) {
         debouncedRedo();
       } else if (e.key === "Delete" && editor) {
         const activeObject = editor.canvas.getActiveObject();
@@ -369,8 +361,7 @@ const CollaborativeWhiteBoard = () => {
 
   return (
     <>
-      <div className="w-full h-full my-7 flex justify-center items-center">
-        <ToolsList />
+      <div className="w-full h-full my-7 flex flex-col md:flex md:flex-row justify-evenly gap-4 items-center">
         <div
           id="white-board"
           className="flex  relative justify-center items-center rounded-2xl w-[80vw] h-[90vh] overflow-hidden border-2"
@@ -395,6 +386,7 @@ const CollaborativeWhiteBoard = () => {
             </div>
           ))}
         </div>
+        <ToolsList />
       </div>
     </>
   );
