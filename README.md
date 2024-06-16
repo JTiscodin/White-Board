@@ -35,11 +35,11 @@ Setting up the project.
 
    node index.js
 ```
+
     
 ## Demo
 
-
-https://github.com/JTiscodin/White-Board/assets/113091818/841a2c0b-ccee-44f7-8570-4211f67733dd
+https://github.com/JTiscodin/White-Board/assets/113091818/48b1fa8d-e977-4ec7-b617-5e02fa483c1f
 
 
 
